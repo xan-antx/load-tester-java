@@ -1,0 +1,125 @@
+// Design tokens for the whole app. Components read colours from here only;
+// index.css mirrors a few of them (CSS cannot import JS) and says so.
+
+export const colors = {
+  // Graphite elevation layers, darkest first.
+  bg: "#111315",           // page
+  surface: "#171A1D",      // step panels
+  surfaceRaised: "#1E2226", // readouts, sub-panels
+  inset: "#0D0F11",        // inputs, lists, code
+  border: "#2C3237",
+  borderSubtle: "#22272B",
+
+  text: "#E3E6E8",
+  textMuted: "#8D969E",
+  // At least 4.5:1 on every surface, including surfaceRaised (WCAG 1.4.3).
+  textFaint: "#818A92",
+
+  // The single brand accent: actions, focus, progress, selection.
+  accent: "#2DD4BF",
+  accentHover: "#5EEAD4",
+  accentSoft: "rgba(45, 212, 191, 0.10)",
+  onAccent: "#0B1312",
+
+  // Status colours carry meaning only (see `outcome` below).
+  success: "#3FB950",      // passed
+  warning: "#D29922",      // 4xx rejected
+  info: "#58A6FF",         // 429 rate limited
+  danger: "#F85149",       // 5xx server error / errors
+  connection: "#8B949E",   // no response at all
+  validation: "#C297FF",   // accepted invalid input (a validation bug)
+  successSoft: "rgba(63, 185, 80, 0.12)",
+  warningSoft: "rgba(210, 153, 34, 0.13)",
+  infoSoft: "rgba(88, 166, 255, 0.12)",
+  dangerSoft: "rgba(248, 81, 73, 0.12)",
+  mutedSoft: "rgba(139, 148, 158, 0.12)",
+  validationSoft: "rgba(194, 151, 255, 0.12)",
+
+  // Chart series: hues deliberately outside the status set (so a line never
+  // reads as "4xx" or "429"), validated for colour-blind separation on the
+  // panel surface.
+  series1: "#9085e9",
+  series2: "#d55181",
+  grid: "#262B30",
+  track: "#262B30",
+
+  // Scrollbar thumb; index.css mirrors this value.
+  scrollbarThumb: "#3A4148",
+};
+
+// What each request outcome looks like, used everywhere an outcome appears
+// (outcome strips, failure cards, findings). Keys match failure_summary.kind.
+export const outcome = {
+  passed: { label: "Passed", fg: colors.success, soft: colors.successSoft },
+  // Runs with expected outcomes: the answer contradicted the expectation.
+  accepted_invalid_input: { label: "Accepted invalid input", fg: colors.validation, soft: colors.validationSoft },
+  rejected_valid_input: { label: "Rejected valid input", fg: colors.warning, soft: colors.warningSoft },
+  rejected: { label: "Rejected (4xx)", fg: colors.warning, soft: colors.warningSoft },
+  rate_limited: { label: "Rate limited (429)", fg: colors.info, soft: colors.infoSoft },
+  server_error: { label: "Server error (5xx)", fg: colors.danger, soft: colors.dangerSoft },
+  connection: { label: "Connection failure", fg: colors.connection, soft: colors.mutedSoft },
+  other: { label: "Other status", fg: colors.connection, soft: colors.mutedSoft },
+};
+
+export const OUTCOME_ORDER = [
+  "passed", "accepted_invalid_input", "rejected_valid_input",
+  "rejected", "rate_limited", "server_error", "connection", "other",
+];
+
+export const radius = {
+  sm: 4,   // chips, small controls
+  md: 6,   // inputs, buttons, sub-panels
+  lg: 8,   // step panels
+  pill: 999,
+};
+
+// Self-hosted (public/fonts, see index.css) with system fallbacks.
+export const font = {
+  sans: `"Barlow", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif`,
+  mono: `"IBM Plex Mono", ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace`,
+};
+
+// Five sizes only; hierarchy comes from weight and colour before size.
+export const type = {
+  meta: 12,    // mono labels, captions, chips, table headers
+  body: 14,    // UI text and table data
+  heading: 16, // step titles, findings
+  title: 22,   // app name
+  readout: 28, // big numbers
+};
+
+// 4px base scale. Gaps inside a group are smaller than gaps between groups.
+export const space = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 32,
+};
+
+// The only z-index values in the app. "local" is used inside components
+// that create their own stacking context (isolation: isolate).
+export const z = {
+  local: 1,
+  sticky: 10,
+};
+
+export const motion = {
+  fast: "150ms", // hover and press feedback
+  base: "200ms", // progress and state changes
+};
+
+const kebab = (key) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+
+// Publishes the tokens as CSS custom properties (--c-accent, --font-mono, …)
+// so index.css can style states like :hover without its own colour values.
+export function applyTheme(root = document.documentElement) {
+  Object.entries(colors).forEach(([k, v]) => root.style.setProperty(`--c-${kebab(k)}`, v));
+  Object.entries(font).forEach(([k, v]) => root.style.setProperty(`--font-${k}`, v));
+  Object.entries(type).forEach(([k, v]) => root.style.setProperty(`--type-${k}`, `${v}px`));
+  Object.entries(space).forEach(([k, v]) => root.style.setProperty(`--space-${k}`, `${v}px`));
+  Object.entries(radius).forEach(([k, v]) => root.style.setProperty(`--radius-${k}`, `${v}px`));
+  Object.entries(z).forEach(([k, v]) => root.style.setProperty(`--z-${k}`, String(v)));
+  Object.entries(motion).forEach(([k, v]) => root.style.setProperty(`--motion-${k}`, v));
+}
