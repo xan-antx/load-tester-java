@@ -1,0 +1,11 @@
+# Test profile: a fresh in-memory database per context and short think times, so a few
+# seconds of load give enough requests per case.
+spring:
+  datasource:
+    url: jdbc:h2:mem:test-${random.uuid};DB_CLOSE_DELAY=-1
+elevate:
+  recover-stale-runs: false
+  engine:
+    think-time-min: 50ms
+    think-time-max: 150ms
+    request-timeout: 5s
