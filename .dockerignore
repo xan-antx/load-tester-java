@@ -1,0 +1,12 @@
+target/
+backend/target/
+mock-target/target/
+**/node_modules/
+frontend/dist/
+data/
+backend/data/
+loadtest-results/
+perf-results/
+.git/
+.idea/
+.vscode/

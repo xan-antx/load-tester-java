@@ -1,0 +1,27 @@
+# Build output
+/target/
+/backend/target/
+/mock-target/target/
+*.class
+
+# Local H2 database (see backend/src/main/resources/application.yml)
+data/
+backend/data/
+
+# CLI output
+loadtest-results/
+perf-results/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Local tool configuration
+.claude/
