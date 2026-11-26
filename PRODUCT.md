@@ -13,7 +13,7 @@ web
   the target handles bad input correctly, stays within its performance targets,
   and how much load it can take. They should not have to write a load-test
   script to get there.
-- **Second audience: course evaluators** (Enterprise Web Application (UCS553))
+- **Second audience: course evaluators** of Enterprise Web Application (UCS553)
   watching live demos, often on a projector. They judge whether the
   system works and whether its results can be trusted. They may not know
   load-testing terms.
