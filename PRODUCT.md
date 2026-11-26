@@ -13,7 +13,7 @@ web
   the target handles bad input correctly, stays within its performance targets,
   and how much load it can take. They should not have to write a load-test
   script to get there.
-- **Second audience: course evaluators** (<FILL IN: Java lab course name/code>)
+- **Second audience: course evaluators** (Enterprise Web Application (UCS553))
   watching live demos, often on a projector. They judge whether the
   system works and whether its results can be trusted. They may not know
   load-testing terms.
@@ -120,7 +120,7 @@ untested cases never looks all-green.**
 
 - **Name:** Elevate Load Tester.
 - **Team:** Team Elevate (Vivek Pandey, Anant Agrawal, Piyush Singh).
-- **Course context:** <FILL IN: Java lab course name/code>. This is the Java
+- **Course context:** Enterprise Web Application (UCS553). This is the Java
   edition of the product; the original Python version (Flask + Locust) is
   https://github.com/xan-antx/load-tester.
 - **Voice:** plain English for non-experts. Jargon is explained where it

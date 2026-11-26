@@ -70,7 +70,7 @@ Checklist for the build, kept up to date so work can resume after an interruptio
 - [x] README, architecture (queue/k8s diagrams), api-contract, demo-script, java-concepts updated
 - [x] Commits, push and PR: committed as 3026d43 on `ui-revamp-parity`, PR xan-antx/load-tester-java#1 opened to `main`
 - [x] PR #1 merged into `main` on 26 Nov 2026; branch `ui-revamp-parity` deleted
-- [-] PRODUCT.md course name/code: still `<FILL IN: Java lab course name/code>` (lines 16 and 123); the course value provided was itself an unfilled template, so nothing was invented
+- [x] PRODUCT.md course context filled in: Enterprise Web Application (UCS553)
 
 ## Decisions
 - **Results stay in Locust's CSV formats on the wire.** The React app parses `stats_csv`,
