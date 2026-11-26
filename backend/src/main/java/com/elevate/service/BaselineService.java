@@ -99,14 +99,14 @@ public class BaselineService {
         }
         boolean isCurrent = runId.equals(baselineId);
         if (baselineId == null || isCurrent) {
-            return new RegressionsResponse(targetUrl, baselineId, isCurrent, null, null);
+            return new RegressionsResponse(targetUrl, baselineId, isCurrent, null, null, true);
         }
         RunSnapshot baseline = snapshots.findSummary(baselineId).orElseThrow();
         MeasuredRun b = baseline.run();
         return new RegressionsResponse(targetUrl, baselineId, false,
                 new RegressionsResponse.Baseline(baselineId, b.getUsers(), Timestamps.format(b.getCreatedAt()),
                         baseline.isGroup()),
-                RegressionReport.detect(baseline.stats(), run.stats()));
+                RegressionReport.detect(baseline.stats(), run.stats()), true);
     }
 
     private Optional<String> baselineId(String targetUrl) {

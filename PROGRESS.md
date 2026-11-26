@@ -53,6 +53,23 @@ Checklist for the build, kept up to date so work can resume after an interruptio
 - [x] backend/Dockerfile, mock-target/Dockerfile (multi-stage, JRE 21, non-root), frontend/Dockerfile (existing, nginx), docker-compose.yml
 - [x] README.md, docs/architecture.md (3 Mermaid diagrams), docs/java-concepts.md (+25 viva Q&A), docs/demo-script.md
 
+## Phase 7 — UI revamp parity (branch `ui-revamp-parity`, from load-tester `0c1bce0`)
+- [x] Backend of the Python repo unchanged since the port (`git diff 1223854 0c1bce0 -- code/*.py code/analysis code/locust_tests code/scripts code/tests` is empty)
+- [x] `docs/parity-audit.md`: every route, module, script, test, CI/infra file and UI field mapped; both backends driven through the same 29-call scenario and every JSON key path diffed
+- [x] Revamped frontend (`code/frontend/src` at 0c1bce0) ported file for file; rest of frontend/ byte-identical except nginx.conf/.env*
+- [x] Java adaptations re-applied to the new files (see "Frontend changes")
+- [x] Backend fields aligned with the Python contract: `child_jobs` rows complete, group `capacity_plan`, `header_names: null` when empty, probe header names in conventional case, `p95_exact` on /api/regressions
+- [x] PRODUCT.md (adapted), DESIGN.md, .impeccable/, skills-lock.json, .claude/skills, .claude/agents (verbatim), .claude/launch.json (rewritten), .gitignore additions merged
+- [x] Queue mode: `queue/` (JobQueue, SqsJobQueue on AWS SDK v2 2.59.10, JobMessage, QueueWorker, WorkerMode, QueueConfig), `java -jar load-tester.jar worker`, backend/Dockerfile.worker, 409 refusals, H2_AUTO_SERVER
+- [x] k8s/ manifests, .gitlab-ci.yml, Makefile, scripts/gate_sample.json, `gate` and `check-sitemap` CLI subcommands
+- [x] RUNBOOK.md (Java commands; worker, gate, check-sitemap, k8s, troubleshooting)
+- [x] docs ported: features, evaluation, ux-review, ux-revamp-plan, OVERNIGHT_SUMMARY — every figure measured on the Java build (runs listed below); figures from the Python-only review sessions (critique score, pixel distances, session row counts) reworded without numbers
+- [x] ./mvnw verify green: 254 tests (24 mock, 219 backend unit/MockMvc, 11 integration), 0 failures; JaCoCo 93.2% on service+engine+analysis (gate 80%), 91.8% all code
+- [x] Browser walkthrough of the new UI against the Java backend (analyze, cases, expectations, custom case, headers, fixed run, baseline, report, split, series, capacity, stop, website run, History compare, make baseline); side by side with the Python version: same layout and flows, only the documented differences (p95 exact vs ≈, "engine instances" vs "processes")
+- [x] CLI exit codes: `loadtest.ci.yml` 0, `loadtest.example.yml` 1, backend down 2, `gate` 0 (15 users) / 1 (150 users, 15 cases worse), capacity 0 (120 sustained); README screenshots in docs/images/
+- [x] README, architecture (queue/k8s diagrams), api-contract, demo-script, java-concepts updated
+- [-] Commits, push and PR: `git commit` was refused by this environment's permission classifier; all work is left uncommitted on `ui-revamp-parity` for you to commit
+
 ## Decisions
 - **Results stay in Locust's CSV formats on the wire.** The React app parses `stats_csv`,
   `failures_csv` and `history_csv`; the Java backend stores structured results
@@ -80,14 +97,58 @@ Checklist for the build, kept up to date so work can resume after an interruptio
 - Group results are merged on read (exactly), not cached.
 
 ## Frontend changes (all listed)
+Phase 6 (original frontend):
 - `.env.development`, `.env.production` added (VITE_API_BASE=http://localhost:8080); `.env.example` now says 8080.
 - `nginx.conf`: proxy to `backend:8080` instead of `backend:5000`.
-- "≈ / approximate p95" is now shown only when a split run is NOT marked `p95_exact` (the Java backend always sends
-  `p95_exact: true`), with an "exact (merged histograms)" note instead: `JobResultSummary.jsx`, `CompareView.jsx`,
-  `SeriesSummary.jsx`, `utils/report.js`, `App.jsx` (badge tooltip). Against the old Python backend it still shows ≈.
-- Wording "Locust process(es)" → "engine instance(s)": `App.jsx` badge, `CapacityConfig.jsx`, `CapacityResult.jsx`,
-  `report.js`; "Locust reports the average" → "The backend reports the average" (`Timeline.jsx`); one comment in `SloVerdict.jsx`.
-- No change to any fetch call, field name or component structure.
+
+Phase 7 (revamped frontend, `code/frontend/src` at load-tester 0c1bce0, copied file for file, then):
+- `api.js`: default API base `http://localhost:8080`.
+- "≈ / approximate p95" only when a split run does NOT send `p95_exact` (the Java backend always sends
+  `p95_exact: true`); otherwise the note "exact (merged histograms)": `utils/runReport.js` (`p95Approx`),
+  `results/RunResults.jsx` (+ P95_EXACT_HELP), `results/CaseResultsTable.jsx`, `results/BaselineComparison.jsx`,
+  `CompareView.jsx`, `SeriesSummary.jsx`, `utils/report.js` (footnote and "Engine instances" line),
+  `views/RunView.jsx` (split chip and popover). Against the Python backend the same build still shows ≈.
+- Wording "parallel processes"/"Locust" → "engine instance(s)": `CapacityConfig.jsx`, `CapacityResult.jsx`,
+  `views/RunView.jsx`, `utils/report.js`; timeout text "The load test did not finish…" (`RunResults.jsx`).
+  The `timeout` status branch is kept (the Python backend can still send it).
+- Comments only: `SloVerdict.jsx`, `hooks/useRun.js`, `utils/estimate.js` (Java cycles cases from a random start).
+- Line endings kept as in the Python repo. No change to any fetch call, field name or component structure.
+
+`grep -i "Locust|5000|≈|approx" frontend/src` — remaining hits, each justified:
+- "Locust's … CSV" comments (`Timeline.jsx`, `parseFailuresCsv.js`, `runReport.js`): the wire format is still Locust's CSV.
+- `estimate.js` comment: describes the Python/Locust case choice next to the Java one.
+- `HEALTH_POLL_MS = 15000` (`useHealth.js`): a poll interval, not the port.
+- ≈ / approx branches in `CompareView`, `SeriesSummary`, `SloVerdict`, `Timeline`, `BaselineComparison`,
+  `CaseResultsTable`, `RunResults`, `report.js`, `RunView`: all gated on `!p95_exact`, so they only show
+  against the Python backend; kept so one frontend works with both.
+
+## Phase 7 decisions
+- **Exact p95 marked, not hidden:** the backend sends `p95_exact`; the UI drops ≈ only when it is set.
+- **Python contract alignment:** `child_jobs` rows carry every Python field, groups carry `capacity_plan`,
+  `header_names` is `null` when empty, probe header names title-cased; `p95_exact` also on /api/regressions.
+- **Percentiles clamped to [min, max]:** HdrHistogram reads back a bucket's top value, so p95 could exceed the
+  slowest request (152.06 > 152 ms). `CaseStats.of` clamps; test `percentilesNeverReadAboveTheSlowestRequest`.
+- **Queue mode like Python:** off by default, same env vars (`USE_SQS`, `SQS_QUEUE_URL`, `AWS_REGION`), the
+  worker is `java -jar load-tester.jar worker`; request headers and capacity runs are refused with 409 in queue
+  mode (headers are never stored; Python has the same limits); the API keeps the MAX_ACTIVE_RUNS slot by polling
+  the shared H2 (`H2_AUTO_SERVER=TRUE`). Tested with a fake queue; not deployed, as in Python.
+- **Makefile instead of MkDocs:** the mkdocs site was not to be copied; `make` wraps mvnw/npm/CLI commands.
+- **IPv6 localhost:** `java.net.http` tries only the first resolved address, so a site bound to ::1 only (Vite's
+  `localhost`) is unreachable from Java while Python's requests falls back. Documented, not worked around.
+- **Docs figures:** every number in the ported docs comes from a run on the Java build (Nov 2026, Java mock,
+  this machine); numbers that existed only in the Python review sessions were replaced by words.
+
+## Measured runs used in the docs (Java build, Java mock)
+- 15 users 15 s, all cases, default expectations: 171 requests, failure rate 24.6%, problem rate 11.1%,
+  p95 147.97 ms, server errors 11.11%, all 27 cases sent.
+- 150 users 15 s: 1163 requests, 3 instances, p95 785.92 ms (exact), 429 ×562 across 27 cases, 500 ×57,
+  32 distinct errors, 15 regressions against the 15-user baseline (gate: 15 cases worse, exit 1).
+- 15 users 20 s, optional fields 2xx: 226 requests, p95 147.71 ms, server errors 7.52%, handled 84.51%.
+- Smoke 5 users 20 s: 75 requests, all 27 cases sent (UI estimate warned about 2).
+- Series 15 users 10 s ×3: 31 s, 11.03 ± 0.29 req/s, p95 148.78 ± 1.12 ms.
+- Stop a 30 s run at 10 s: cancelled, 111 requests kept, all 27 cases.
+- Capacity (CLI, valid_sample, defaults): 84 s, max sustainable 120, breaking point 140 (p95 691.71 ms), ~79 req/s plateau.
+- CLI: ci config exit 0 (189 requests, p95 149.5 ms, 100% handled); example config 15 s exit 1 (server errors 6.55%).
 
 ## Bugs found by testing (and fixed)
 - Users started at case i: short runs never reached the last cases (both 500 bugs missed). Now a random start case.
@@ -96,5 +157,4 @@ Checklist for the build, kept up to date so work can resume after an interruptio
 - CLI printed "null" for a refused connection; now names the exception.
 
 ## Skipped / not ported (deliberately)
-- SQS queue mode and Kubernetes manifests of the Python version (single-process design; see README limitations).
 - "timeout" status: the Java engine stops itself at the end of the duration, so it never needs a watchdog.

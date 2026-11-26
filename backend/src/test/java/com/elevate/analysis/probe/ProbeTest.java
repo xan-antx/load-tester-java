@@ -71,6 +71,14 @@ class ProbeTest {
     }
 
     @Test
+    void responseHeaderNamesAreShownInConventionalCase() {
+        assertThat(ReachabilityProbe.canonical("content-type")).isEqualTo("Content-Type");
+        assertThat(ReachabilityProbe.canonical("allow")).isEqualTo("Allow");
+        SanityResult r = probe.check(stub.url("/page"), RequestHeaders.NONE);
+        assertThat(r.headers()).containsKey("Content-Type");
+    }
+
+    @Test
     void htmlPageIsAWebsiteAndHeadIsEnough() {
         SanityResult r = probe.check(stub.url("/page"), RequestHeaders.NONE);
         assertThat(r.checkedWithMethod()).isEqualTo("HEAD");

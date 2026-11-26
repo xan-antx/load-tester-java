@@ -37,7 +37,7 @@ import com.elevate.model.RunStatus;
 class RunControlTest {
 
     private static final AppProperties PROPS = new AppProperties(true, 2, List.of(), true,
-            new AppProperties.Engine(Duration.ofMillis(500), Duration.ofSeconds(2), Duration.ofSeconds(30)));
+            new AppProperties.Engine(Duration.ofMillis(500), Duration.ofSeconds(2), Duration.ofSeconds(30)), new AppProperties.Queue(false, "", "eu-north-1"));
 
     @Test
     void limiterAllowsMaxActiveRunsThen429() {
@@ -71,7 +71,8 @@ class RunControlTest {
     void cancelDependsOnWhatTheIdNames() {
         RunStore store = mock(RunStore.class);
         RunRegistry registry = new RunRegistry();
-        RunExecutor executor = new RunExecutor(store, registry, new ActiveRunLimiter(PROPS), new EngineSpecFactory(PROPS));
+        RunExecutor executor = new RunExecutor(store, registry, new ActiveRunLimiter(PROPS),
+                new JobRunner(store, registry, new EngineSpecFactory(PROPS)), QueueModeTest.noQueue());
         when(store.kindOf(anyString())).thenReturn(Optional.empty());
         assertThatThrownBy(() -> executor.cancel("x")).isInstanceOf(NotFoundException.class).hasMessage("run 'x' not found");
 

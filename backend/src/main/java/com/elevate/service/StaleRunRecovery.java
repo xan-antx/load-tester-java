@@ -11,7 +11,8 @@ import com.elevate.config.AppProperties;
  * At startup, runs left "queued" or "running" by a previous backend process can never finish
  * (their threads died with it), so they are marked "interrupted". This runs once all beans
  * exist but before the web server accepts requests, so no new run can be caught by mistake.
- * {@code RECOVER_STALE_RUNS=false} turns it off.
+ * {@code RECOVER_STALE_RUNS=false} turns it off; so does queue mode, where a remote worker
+ * may still be running them.
  */
 @Component
 public class StaleRunRecovery implements SmartInitializingSingleton {
@@ -32,7 +33,8 @@ public class StaleRunRecovery implements SmartInitializingSingleton {
 
     @Override
     public void afterSingletonsInstantiated() {
-        if (!properties.recoverStaleRuns()) {
+        // In queue mode a worker may still be running those runs.
+        if (!properties.recoverStaleRuns() || properties.queue().useSqs()) {
             return;
         }
         int marked = store.markLeftoversInterrupted();

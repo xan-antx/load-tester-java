@@ -161,8 +161,11 @@ outcome_summary: OutcomeSummary|null, slo_verdict: SloVerdict|null, capacity: Ca
 **Split group** (users > 50): the same analysis fields, with `group_id`, `job_type`,
 `child_count`, `aggregated_stats_csv`, `aggregated_failures_csv`,
 `aggregated_history_csv` and `child_jobs: [job]` (the frontend detects a group by
-`child_jobs` being an array). Java addition: `"p95_exact": true` — the merged
-percentiles are exact (see below).
+`child_jobs` being an array; each child row has `job_id, target_url, users, spawn_rate,
+duration_seconds, status, stats_csv, failures_csv, history_csv, error, group_id, created_at,
+completed_at, is_baseline, header_names, case_expectations, slo, mode, capacity_plan`, and the group
+has `capacity_plan: null`). Java addition: `"p95_exact": true` — the merged
+percentiles are exact (see below). The UI shows "≈" only for split runs without it.
 
 **Repeat series**
 ```
@@ -171,6 +174,10 @@ run_ids: [id], status, error, header_names, created_at, completed_at,
 runs: [{"id", "status", "is_group", "slo_verdict": "PASS"|"FAIL"|null, "problem_rate"}],
 series_summary: SeriesSummary|null     (once the series has stopped)
 ```
+
+`header_names` is `null` when no headers were sent (as in Python). Not sent by Java:
+`stdout`, `stderr` (Locust subprocess output) and the raw `capacity_steps` text (the computed
+`capacity` object carries the steps).
 
 Statuses: `queued`, `running`, `completed`, `failed`, `cancelled`, `interrupted`
 (the frontend also knows `timeout`, which the Java engine never needs: it stops itself).
@@ -227,10 +234,20 @@ One baseline per target URL (setting one clears the previous).
 `200 {"target_url", "baseline_id", "is_current_baseline", "baseline": {"id", "users", "created_at", "is_group"}|null,
 "regressions": [{"case", "baseline_rate", "current_rate", "increase", "baseline_requests", "current_requests"}],
 "baseline_p95", "current_p95", "p95_change_pct", "threshold": 10.0, "min_requests": 5}`
-(the comparison fields only when a different baseline run exists) ·
+(the comparison fields only when a different baseline run exists). Java addition:
+`"p95_exact": true` (a split baseline's p95 is exact, so the UI shows no "≈") ·
 `404 {"error": "run '<id>' not found"}` · `404 {"error": "baseline run '<id>' not found"}`.
 
 ---
+
+## Queue mode (`USE_SQS=true`, not deployed)
+
+As in Python, with queue mode on: `POST /api/cancel/{id}`, start requests with `headers`, and
+capacity runs answer **409** with `Stopping a test is not available in queue (SQS) mode: …`,
+`Request headers are not supported in queue (SQS) mode.` and
+`Capacity runs are not available in queue (SQS) mode.` Jobs go to SQS with the Python payload
+keys (`job_id, job_type, target_url, users, spawn_rate, duration_seconds` + `target_path, cases` or
+`paths`); `java -jar load-tester.jar worker` runs them.
 
 ## Java additions (not used by the frontend)
 

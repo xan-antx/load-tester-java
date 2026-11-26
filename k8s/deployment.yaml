@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-tester-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: load-tester-api
+  template:
+    metadata:
+      labels:
+        app: load-tester-api
+    spec:
+      # The image runs as uid 10001 (see backend/Dockerfile); fsGroup makes the
+      # H2 database volume writable for that user.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: load-tester-api
+          # Built and pushed by GitHub Actions (.github/workflows/ci.yml) on
+          # every push to main; also tagged with the commit SHA. The GHCR
+          # package must be public, or the cluster needs an imagePullSecret.
+          image: ghcr.io/xan-antx/elevate-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: aws-sqs-credentials
+          volumeMounts:
+            - name: db-storage
+              mountPath: /data
+          env:
+            - name: DATA_DIR
+              value: "/data"
+            # Queue mode is NOT DEPLOYED (future work). It would require
+            # k8s/worker-deployment.yaml to be applied and a worker image
+            # (backend/Dockerfile.worker) to be built/pushed — a later phase.
+            # Until then jobs run in-process (virtual threads), same as local mode.
+            - name: USE_SQS
+              value: "false"
+            # A public deployment must not probe or load-test the cluster's
+            # own network: private, loopback, link-local and multicast
+            # targets are refused (metadata addresses always are).
+            - name: ALLOW_PRIVATE_TARGETS
+              value: "false"
+          securityContext:
+            allowPrivilegeEscalation: false
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 20
+      volumes:
+        - name: db-storage
+          persistentVolumeClaim:
+            claimName: load-tester-db-pvc

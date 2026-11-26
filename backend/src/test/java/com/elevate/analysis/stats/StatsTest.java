@@ -108,6 +108,14 @@ class StatsTest {
     }
 
     @Test
+    void percentilesNeverReadAboveTheSlowestRequest() {
+        CaseStats row = CaseStats.of(measurement("x", 0, 152, 152, 150), 1);
+        assertThat(row.maxMs()).isEqualTo(152.0);
+        assertThat(row.percentiles()).allSatisfy(p -> assertThat(p).isBetween(row.minMs(), row.maxMs()));
+        assertThat(row.p95Ms()).isEqualTo(152.0);
+    }
+
+    @Test
     void emptyCasesWriteNotAvailable() {
         CaseMeasurement none = CaseMeasurement.empty("never_sent", "POST");
         String csv = LocustCsv.stats(StatsTable.of(StatsTestData.results(10, none, measurement("x", 0, 5))));

@@ -14,6 +14,15 @@ React frontend is the same app, talking to the Java backend through the same RES
 
 **Team:** Anant Agrawal, Vivek Pandey, Piyush
 
+The app has three views: **New test** (target, cases, load), **Run** (findings first, then
+figures, SLO, cases, failure reasons, timeline) and **History** (past runs, compare, baselines).
+
+| New test | Run results |
+|---|---|
+| ![New test view](docs/images/new-test.png) | ![Run view with findings](docs/images/run-results.png) |
+| **History: compare runs** | **Capacity finder** |
+| ![History view with a comparison](docs/images/history-compare.png) | ![Capacity result](docs/images/capacity-result.png) |
+
 ## Features
 
 | Feature | Where |
@@ -30,7 +39,8 @@ React frontend is the same app, talking to the Java backend through the same RES
 | Capacity finder: step load, per-step SLO, max sustainable users and breaking point, early stop | `analysis.capacity`, `StepTracker` |
 | Run history, compare 2–4 runs, baselines and regression flags, repeat series with statistics | `RunViewService`, `BaselineService`, `analysis.compare` |
 | Markdown report (browser download and `GET /api/report/{id}`) | `ReportService` |
-| CLI for CI pipelines: exit 0 (pass), 1 (fail), 2 (error) | `cli` |
+| CLI for CI pipelines: exit 0 (pass), 1 (fail), 2 (error); regression gate; sitemap check | `cli` |
+| Queue mode (SQS, AWS SDK v2) with a separate worker — implemented, not deployed | `queue` |
 | Java mock target with known deliberate bugs | `mock-target` module |
 
 The API contract (every endpoint, field and status code) is in
@@ -95,6 +105,10 @@ java -jar backend/target/load-tester.jar run --config loadtest.example.yml
 java -jar backend/target/load-tester.jar run --config loadtest.ci.yml --users 20 --duration 15
 ```
 
+More commands in the same jar: `gate` (regression gate against the target's baseline, exit
+0/1/2), `check-sitemap` (the pages a website run would use) and `worker` (queue mode). See
+[RUNBOOK.md](RUNBOOK.md); the `Makefile` wraps the usual commands.
+
 Exit codes: `0` SLO passed (capacity mode: at least `min_users` sustained), `1` SLO
 failed, `2` error. It writes `report-<id>.md`, `result-<id>.json` and `summary.md`
 (the verdict table, which CI appends to the job summary) into the output directory.
@@ -125,18 +139,22 @@ Results stay in Locust's CSV formats on the wire (the frontend parses them), but
 backend stores structured data — counts, compressed HdrHistograms, failure tallies,
 per-second samples — and renders the CSVs when a run is read.
 
-Diagrams: [docs/architecture.md](docs/architecture.md). Java concepts and viva
+Diagrams: [docs/architecture.md](docs/architecture.md). Features: [docs/features.md](docs/features.md).
+Measured results: [docs/evaluation.md](docs/evaluation.md). Parity with the Python version:
+[docs/parity-audit.md](docs/parity-audit.md). Run guide: [RUNBOOK.md](RUNBOOK.md). Product and design:
+[PRODUCT.md](PRODUCT.md), [DESIGN.md](DESIGN.md). Java concepts and viva
 questions: [docs/java-concepts.md](docs/java-concepts.md). Demo:
 [docs/demo-script.md](docs/demo-script.md). Build log and decisions:
 [PROGRESS.md](PROGRESS.md).
 
 ## Testing
 
-`./mvnw verify` runs 236 tests: 24 for the mock target, 203 backend unit and MockMvc
-tests, and 9 integration tests that start the Java mock on a random port and run real
-load tests of a few seconds (engine alone, and the whole app over HTTP including the
-CLI). JaCoCo enforces at least 80% line coverage on `service`, `engine` and `analysis`
-(currently 91%; report in `backend/target/site/jacoco/index.html`).
+`./mvnw verify` runs 254 tests: 24 for the mock target, 219 backend unit and MockMvc tests
+(including queue mode with a fake queue), and 11 integration tests that start the Java mock on a
+random port and run real load tests of a few seconds (engine alone, and the whole app over HTTP:
+single, split, cancelled, capacity, series and website runs, and the CLI). JaCoCo enforces at least
+80% line coverage on `service`, `engine` and `analysis` (currently 93.2%; all code 91.8%; report in
+`backend/target/site/jacoco/index.html`).
 
 CI (`.github/workflows/ci.yml`): Maven build and tests, frontend lint and build, the
 performance gate (mock + backend + CLI with `loadtest.ci.yml`), and on `main` the
@@ -144,9 +162,12 @@ images pushed to GHCR.
 
 ## Known limitations
 
-- Runs execute inside the backend process. Split runs are parallel engine instances on
-  the same machine, not a distributed cluster (the Python version's SQS queue mode and
-  Kubernetes manifests were not ported).
+- Runs execute inside the backend process by default. Split runs are parallel engine instances
+  on the same machine, not a distributed cluster. Queue mode (SQS + worker) and the Kubernetes
+  manifests exist but, as in the Python version, are not deployed.
+- `java.net.http` connects only to the first address a host name resolves to: a server that
+  listens on IPv6 loopback only (e.g. Vite's default `localhost`) is unreachable via `localhost`
+  from the Java backend, while Python's `requests` falls back. Use `127.0.0.1`/`[::1]` or bind both.
 - Percentiles are exact to HdrHistogram's resolution: 3 significant digits (±0.1%).
   Merging is exact; a recorded 100 ms may read back as 100.03 ms.
 - Load-test requests never follow redirects (only the first URL passes the target

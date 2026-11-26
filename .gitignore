@@ -23,5 +23,9 @@ frontend/.env
 .vscode/
 .DS_Store
 
-# Local tool configuration
-.claude/
+# Local agent tooling (the shared .claude/skills, .claude/agents and launch.json are committed)
+.claude/settings.local.json
+.agents/
+.github/skills/
+.github/agents/
+.github/hooks/

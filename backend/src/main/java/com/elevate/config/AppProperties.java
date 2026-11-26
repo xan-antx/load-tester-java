@@ -14,6 +14,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param corsAllowedOrigins  browser origins allowed to call the API
  * @param recoverStaleRuns    mark leftover queued/running runs as interrupted at startup
  * @param engine              load-engine settings
+ * @param queue               queue mode (SQS) settings
  */
 @ConfigurationProperties("elevate")
 public record AppProperties(
@@ -21,7 +22,8 @@ public record AppProperties(
         @DefaultValue("1") int maxActiveRuns,
         @DefaultValue({"http://localhost:5173", "http://127.0.0.1:5173"}) List<String> corsAllowedOrigins,
         @DefaultValue("true") boolean recoverStaleRuns,
-        @DefaultValue Engine engine) {
+        @DefaultValue Engine engine,
+        @DefaultValue Queue queue) {
 
     /** At least one run must be allowed. */
     public AppProperties {
@@ -37,5 +39,19 @@ public record AppProperties(
             @DefaultValue("500ms") Duration thinkTimeMin,
             @DefaultValue("2s") Duration thinkTimeMax,
             @DefaultValue("30s") Duration requestTimeout) {
+    }
+
+    /**
+     * Queue mode: start requests put jobs on an SQS queue and a separate worker runs them.
+     * Off by default; the same environment variables as the Python version.
+     *
+     * @param useSqs      {@code USE_SQS}
+     * @param sqsQueueUrl {@code SQS_QUEUE_URL}
+     * @param awsRegion   {@code AWS_DEFAULT_REGION}
+     */
+    public record Queue(
+            @DefaultValue("false") boolean useSqs,
+            @DefaultValue("") String sqsQueueUrl,
+            @DefaultValue("eu-north-1") String awsRegion) {
     }
 }

@@ -134,10 +134,14 @@ class LoadTestControllerTest {
     @Test
     void statusOfAGroupAndASeries() throws Exception {
         when(views.status("g")).thenReturn(new GroupView("g", "http://h", JobType.API, 120, 20, 10, 3, RunStatus.RUNNING, null,
-                "t", null, false, List.of(), null, null, null, null, null, RunMode.FIXED,
-                List.of(new ChildJobView("c1", RunStatus.RUNNING, 40, "t", null, null, null, null, null)), true, ANALYSIS));
+                "t", null, false, null, null, null, null, null, null, RunMode.FIXED, null,
+                List.of(new ChildJobView("c1", "http://h", 40, 20, 10, RunStatus.RUNNING, null, null, null, null, "g", "t",
+                        null, false, null, null, null, RunMode.FIXED, null)), true, ANALYSIS));
         mvc.perform(get("/api/load-test-status/g")).andExpect(jsonPath("$.group_id").value("g"))
                 .andExpect(jsonPath("$.child_jobs[0].job_id").value("c1"))
+                .andExpect(jsonPath("$.child_jobs[0].group_id").value("g"))
+                .andExpect(jsonPath("$.capacity_plan").isEmpty())
+                .andExpect(jsonPath("$.header_names").isEmpty())
                 .andExpect(jsonPath("$.p95_exact").value(true));
         when(views.status("s")).thenReturn(new SeriesView("s", "http://h", JobType.API, 5, 1, 10, 2, List.of("r1"),
                 RunStatus.RUNNING, null, List.of(), "t", null,

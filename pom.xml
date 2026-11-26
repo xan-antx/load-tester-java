@@ -35,10 +35,18 @@
         <hdrhistogram.version>2.2.2</hdrhistogram.version>
         <picocli.version>4.7.7</picocli.version>
         <jacoco.version>0.8.16</jacoco.version>
+        <aws-sdk.version>2.59.10</aws-sdk.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws-sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>com.elevate</groupId>
                 <artifactId>mock-target</artifactId>
