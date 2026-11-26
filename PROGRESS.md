@@ -68,7 +68,9 @@ Checklist for the build, kept up to date so work can resume after an interruptio
 - [x] Browser walkthrough of the new UI against the Java backend (analyze, cases, expectations, custom case, headers, fixed run, baseline, report, split, series, capacity, stop, website run, History compare, make baseline); side by side with the Python version: same layout and flows, only the documented differences (p95 exact vs ≈, "engine instances" vs "processes")
 - [x] CLI exit codes: `loadtest.ci.yml` 0, `loadtest.example.yml` 1, backend down 2, `gate` 0 (15 users) / 1 (150 users, 15 cases worse), capacity 0 (120 sustained); README screenshots in docs/images/
 - [x] README, architecture (queue/k8s diagrams), api-contract, demo-script, java-concepts updated
-- [-] Commits, push and PR: `git commit` was refused by this environment's permission classifier; all work is left uncommitted on `ui-revamp-parity` for you to commit
+- [x] Commits, push and PR: committed as 3026d43 on `ui-revamp-parity`, PR xan-antx/load-tester-java#1 opened to `main`
+- [x] PR #1 merged into `main` on 26 Nov 2026; branch `ui-revamp-parity` deleted
+- [-] PRODUCT.md course name/code: still `<FILL IN: Java lab course name/code>` (lines 16 and 123); the course value provided was itself an unfilled template, so nothing was invented
 
 ## Decisions
 - **Results stay in Locust's CSV formats on the wire.** The React app parses `stats_csv`,
