@@ -1,7 +1,9 @@
 package com.elevate.service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ import com.elevate.dto.SeriesView;
 import com.elevate.dto.Timestamps;
 import com.elevate.exception.BadRequestException;
 import com.elevate.exception.NotFoundException;
+import com.elevate.model.Expectation;
 import com.elevate.model.MeasuredRun;
 import com.elevate.model.RepeatSeries;
 import com.elevate.model.RunStatus;
@@ -127,24 +130,36 @@ public class RunViewService {
             return new GroupView(group.getId(), group.getTargetUrl(), group.getJobType(), group.getUsers(),
                     group.getSpawnRate(), group.getDurationSeconds(), group.getChildCount(), s.status(), group.getError(),
                     Timestamps.format(group.getCreatedAt()), Timestamps.format(group.getCompletedAt()), group.isBaseline(),
-                    group.getHeaderNames(), LocustCsv.stats(s.stats()), LocustCsv.failures(r.failures()),
-                    LocustCsv.history(r.timeline()), s.expectations(), group.getSlo(), group.getMode(),
+                    names(group.getHeaderNames()), LocustCsv.stats(s.stats()), LocustCsv.failures(r.failures()),
+                    LocustCsv.history(r.timeline()), s.expectations(), group.getSlo(), group.getMode(), null,
                     group.getChildren().stream().map(RunViewService::child).toList(), true, s.analysis());
         }
         TestRun job = (TestRun) run;
         return new JobView(job.getId(), job.getTargetUrl(), job.getJobType(), job.getUsers(), job.getSpawnRate(),
                 job.getDurationSeconds(), s.status(), job.getError(), job.getGroup() == null ? null : job.getGroup().getId(),
                 Timestamps.format(job.getCreatedAt()), Timestamps.format(job.getCompletedAt()), job.isBaseline(),
-                job.getHeaderNames(), LocustCsv.stats(s.stats()), LocustCsv.failures(r.failures()),
+                names(job.getHeaderNames()), LocustCsv.stats(s.stats()), LocustCsv.failures(r.failures()),
                 LocustCsv.history(r.timeline()), s.expectations(), job.getSlo(), job.getMode(), job.getCapacityPlan(),
                 s.analysis());
     }
 
+    /** A child of a split group, with the same fields as a run row of the Python version. */
     private static ChildJobView child(TestRun child) {
         RunResults r = child.loadResults(true);
-        return new ChildJobView(child.getId(), child.getStatus(), child.getUsers(), Timestamps.format(child.getCreatedAt()),
-                Timestamps.format(child.getCompletedAt()), child.getError(), LocustCsv.stats(StatsTable.of(r)),
-                LocustCsv.failures(r.failures()), LocustCsv.history(r.timeline()));
+        Map<String, Expectation> expectations = new LinkedHashMap<>();
+        child.getCases().stream().filter(c -> c.getExpect() != null)
+                .forEach(c -> expectations.put(c.getLabel(), c.getExpect()));
+        return new ChildJobView(child.getId(), child.getTargetUrl(), child.getUsers(), child.getSpawnRate(),
+                child.getDurationSeconds(), child.getStatus(), LocustCsv.stats(StatsTable.of(r)),
+                LocustCsv.failures(r.failures()), LocustCsv.history(r.timeline()), child.getError(),
+                child.getGroup() == null ? null : child.getGroup().getId(), Timestamps.format(child.getCreatedAt()),
+                Timestamps.format(child.getCompletedAt()), child.isBaseline(), names(child.getHeaderNames()),
+                expectations.isEmpty() ? null : expectations, child.getSlo(), child.getMode(), child.getCapacityPlan());
+    }
+
+    /** Header names, or {@code null} when none were sent (as the Python version stores them). */
+    private static List<String> names(List<String> headerNames) {
+        return headerNames.isEmpty() ? null : headerNames;
     }
 
     private SeriesView seriesView(RepeatSeries s) {
@@ -164,7 +179,7 @@ public class RunViewService {
         }
         SeriesSummary summary = s.getStatus().isTerminal() && !finished.isEmpty() ? SeriesSummary.of(finished) : null;
         return new SeriesView(s.getId(), s.getTargetUrl(), s.getJobType(), s.getUsers(), s.getSpawnRate(),
-                s.getDurationSeconds(), s.getRepeatCount(), s.getRunIds(), s.getStatus(), s.getError(), s.getHeaderNames(),
+                s.getDurationSeconds(), s.getRepeatCount(), s.getRunIds(), s.getStatus(), s.getError(), names(s.getHeaderNames()),
                 Timestamps.format(s.getCreatedAt()), Timestamps.format(s.getCompletedAt()), repeats, summary, true);
     }
 

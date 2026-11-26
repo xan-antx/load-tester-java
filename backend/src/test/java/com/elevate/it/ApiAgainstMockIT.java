@@ -249,6 +249,45 @@ class ApiAgainstMockIT {
     }
 
     @Test
+    @Order(7)
+    void seriesRunsBackToBack() throws Exception {
+        ObjectNode body = startBody("[\"valid_sample\",\"missing_username\"]", 3, 2);
+        body.put("repeat", 2);
+        Reply started = call("POST", "/api/start-load-test", body.toString());
+        assertThat(started.body().get("is_series").asBoolean()).isTrue();
+        JsonNode series = waitFor(started.body().get("series_id").asString());
+        assertThat(series.get("status").asString()).isEqualTo("completed");
+        assertThat(series.get("runs")).hasSize(2);
+        assertThat(series.at("/series_summary/repeats").asInt()).isEqualTo(2);
+        assertThat(series.at("/series_summary/overall/p95/values")).hasSize(2);
+        JsonNode first = call("GET", "/api/load-test-status/" + series.at("/run_ids/0").asString(), null).body();
+        JsonNode second = call("GET", "/api/load-test-status/" + series.at("/run_ids/1").asString(), null).body();
+        assertThat(second.get("created_at").asString()).as("the second repeat starts after the first")
+                .isGreaterThanOrEqualTo(first.get("completed_at").asString());
+    }
+
+    @Test
+    @Order(7)
+    void websiteRunRequestsTheSitemapPages() throws Exception {
+        String origin = mock.loginUrl().replace("/api/login", "");
+        String sitemap = "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"><url><loc>" + origin
+                + "/health</loc></url><url><loc>" + origin + "/missing</loc></url><url><loc>" + origin
+                + "/logo.png</loc></url></urlset>";
+        ObjectNode body = JSON.createObjectNode();
+        body.put("url", origin + "/").put("i_own_target", true).put("users", 2).put("spawn_rate", 2)
+                .put("duration_seconds", 2).put("sitemap_raw", sitemap);
+        Reply started = call("POST", "/api/start-website-load-test", body.toString());
+        assertThat(started.status()).isEqualTo(202);
+        assertThat(started.body().get("paths_used")).hasSize(2);
+        JsonNode run = waitFor(started.body().get("job_id").asString());
+        assertThat(run.get("job_type").asString()).isEqualTo("website");
+        assertThat(run.get("stats_csv").asString()).contains("GET,/health,").contains("GET,/missing,");
+        assertThat(run.at("/failure_summary/0/kind").asString()).isEqualTo("rejected");
+        assertThat(run.at("/failure_summary/0/code").asInt()).isEqualTo(404);
+        assertThat(run.get("outcome_summary").isNull()).isTrue();
+    }
+
+    @Test
     @Order(8)
     void leftoverRunsAreMarkedInterruptedOnStartup() {
         TestRun stale = new TestRun("stale-run", new RunSettings("http://x", JobType.API, 1, 1, 1, List.of()), "/", List.of(),

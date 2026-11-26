@@ -1,0 +1,43 @@
+# NOT DEPLOYED — future work. The SQS queue-mode worker; CI does not apply this
+# manifest and the API runs with USE_SQS=false. See RUNBOOK.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-tester-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: load-tester-worker
+  template:
+    metadata:
+      labels:
+        app: load-tester-worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: load-tester-worker
+          # Built from backend/Dockerfile.worker (java -jar load-tester.jar worker).
+          image: load-tester-worker:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: aws-sqs-credentials
+          volumeMounts:
+            - name: db-storage
+              mountPath: /data
+          env:
+            - name: DATA_DIR
+              value: "/data"
+            # The API and the worker open the same H2 file; AUTO_SERVER lets the
+            # second process reach it through the first (the API must set it too).
+            - name: H2_AUTO_SERVER
+              value: "TRUE"
+      volumes:
+        - name: db-storage
+          persistentVolumeClaim:
+            claimName: load-tester-db-pvc

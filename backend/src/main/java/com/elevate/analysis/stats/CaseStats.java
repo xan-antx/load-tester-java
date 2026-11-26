@@ -38,14 +38,21 @@ public record CaseStats(String name, String method, long requests, long failures
      */
     public static CaseStats of(CaseMeasurement m, double elapsedSeconds) {
         Histogram h = m.histogram();
-        List<Double> values = new ArrayList<>(PERCENTILES.size());
-        PERCENTILES.forEach(p -> values.add(Histograms.percentileMs(h, p)));
         boolean any = m.requests() > 0;
+        // HdrHistogram reports the top of a value's 0.1% bucket; keep percentiles inside the
+        // exact min/max so a p95 never reads above the slowest request.
+        double minMs = any ? m.minMicros() / 1000.0 : 0;
+        double maxMs = any ? m.maxMicros() / 1000.0 : 0;
+        List<Double> values = new ArrayList<>(PERCENTILES.size());
+        PERCENTILES.forEach(p -> {
+            Double v = Histograms.percentileMs(h, p);
+            values.add(v == null ? null : Math.max(minMs, Math.min(v, maxMs)));
+        });
         double seconds = elapsedSeconds > 0 ? elapsedSeconds : 1;
         return new CaseStats(m.name(), m.method(), m.requests(), m.failures(),
                 any ? m.sumMicros() / 1000.0 / m.requests() : 0,
-                any ? m.minMicros() / 1000.0 : 0,
-                any ? m.maxMicros() / 1000.0 : 0,
+                minMs,
+                maxMs,
                 any ? (double) m.contentBytes() / m.requests() : 0,
                 m.requests() / seconds, m.failures() / seconds,
                 Collections.unmodifiableList(values));

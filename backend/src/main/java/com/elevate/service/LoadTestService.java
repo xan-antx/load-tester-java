@@ -20,6 +20,7 @@ import com.elevate.analysis.target.TargetGuard;
 import com.elevate.dto.StartRunRequest;
 import com.elevate.dto.StartRunResponse;
 import com.elevate.exception.BadRequestException;
+import com.elevate.exception.ConflictException;
 import com.elevate.exception.OwnershipNotConfirmedException;
 import com.elevate.exception.TargetBlockedException;
 import com.elevate.model.CapacityPlan;
@@ -89,8 +90,12 @@ public class LoadTestService {
     private StartRunResponse start(JobType type, StartRunRequest request, Target target, List<RunCase> cases,
                                    List<String> pathsUsed) {
         RequestHeaders headers = RequestHeaders.clean(request.headers());
+        if (executor.isQueueMode() && !headers.values().isEmpty()) {
+            // The queue message would carry the values to another machine; refuse rather than store secrets there.
+            throw new ConflictException("Request headers are not supported in queue (SQS) mode.");
+        }
         Slo slo = SloValidator.clean(request.slo());
-        CapacityPlan plan = capacityPlan(request, slo);
+        CapacityPlan plan = capacityPlan(request, slo, executor.isQueueMode());
         RunSettings settings = new RunSettings(target.host(), type, request.users(), request.spawnRate(),
                 request.durationSeconds(), headers.names());
         limiter.acquire();
@@ -133,12 +138,15 @@ public class LoadTestService {
         return store.saveGroup(group, children);
     }
 
-    private static CapacityPlan capacityPlan(StartRunRequest request, Slo slo) {
+    private static CapacityPlan capacityPlan(StartRunRequest request, Slo slo, boolean queueMode) {
         if ("fixed".equals(request.mode())) {
             return null;
         }
         if (!"capacity".equals(request.mode())) {
             throw new BadRequestException("mode must be \"fixed\" or \"capacity\"");
+        }
+        if (queueMode) {
+            throw new ConflictException("Capacity runs are not available in queue (SQS) mode.");
         }
         if (request.repeat() > 1) {
             throw new BadRequestException("repeat cannot be combined with a capacity run");

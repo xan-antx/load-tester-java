@@ -84,7 +84,7 @@ public final class ReachabilityProbe {
         List<ProbeAttempt> attempts = answers.stream().map(Answer::attempt).toList();
         HttpResponse<String> response = deciding.response();
         Map<String, String> headers = new LinkedHashMap<>();
-        response.headers().map().forEach((name, values) -> headers.put(name, String.join(", ", values)));
+        response.headers().map().forEach((name, values) -> headers.put(canonical(name), String.join(", ", values)));
         List<Answer> refused = answers.stream()
                 .filter(a -> !a.method().equals("OPTIONS") && isRefusal(a.response().statusCode())).toList();
         if (!triedEveryMethod || refused.isEmpty()) {
@@ -96,6 +96,20 @@ public final class ReachabilityProbe {
         return new SanityResult(true, anyAnswer, refused.getLast().response().statusCode(),
                 response.uri().toString(), headers, deciding.method(), attempts, true,
                 allow.isEmpty() ? null : allow, null, null);
+    }
+
+    /**
+     * java.net.http reports header names in lower case; show them the conventional way
+     * ({@code content-type} → {@code Content-Type}), as the Python version does.
+     */
+    static String canonical(String name) {
+        StringBuilder out = new StringBuilder(name.length());
+        boolean upper = true;
+        for (char c : name.toCharArray()) {
+            out.append(upper ? Character.toUpperCase(c) : c);
+            upper = c == '-';
+        }
+        return out.toString();
     }
 
     private static boolean isRefusal(int status) {

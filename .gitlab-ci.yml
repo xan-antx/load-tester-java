@@ -1,0 +1,54 @@
+stages:
+  - test
+  - build
+  - deploy
+
+test:
+  stage: test
+  tags:
+    - k3s
+  image: eclipse-temurin:21-jdk
+  script:
+    - ./mvnw -B verify
+
+# Example performance regression gate (see RUNBOOK.md). It never runs by itself:
+# `when: manual` means someone must press "play" on the pipeline page,
+# `allow_failure: true` means its result cannot block build/deploy, and
+# `needs: []` means it does not wait for or hold up other jobs. It needs a
+# reachable backend and target, given as CI/CD variables GATE_API_URL and
+# GATE_TARGET_URL (optionally GATE_BASELINE_ID).
+regression-gate:
+  stage: test
+  tags:
+    - k3s
+  image: eclipse-temurin:21-jdk
+  when: manual
+  allow_failure: true
+  needs: []
+  script:
+    - ./mvnw -B -q package -DskipTests
+    - java -jar backend/target/load-tester.jar gate --api "$GATE_API_URL" --url "$GATE_TARGET_URL"
+      --sample scripts/gate_sample.json --users 50 --duration 30 --i-own-target
+      ${GATE_BASELINE_ID:+--baseline-id "$GATE_BASELINE_ID"}
+
+build:
+  stage: build
+  tags:
+    - k3s
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -f backend/Dockerfile -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+
+deploy:
+  stage: deploy
+  tags:
+    - k3s
+  variables:
+    KUBECONFIG: "/home/gitlab-runner/.kube/config"
+  script:
+    - kubectl apply -f k8s/pvc.yaml
+    - kubectl apply -f k8s/deployment.yaml
+    - kubectl apply -f k8s/service.yaml
+    - kubectl set image deployment/load-tester-api load-tester-api="$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+    - kubectl rollout status deployment/load-tester-api --timeout=180s

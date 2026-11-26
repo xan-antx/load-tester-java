@@ -195,3 +195,56 @@ A run above 50 users follows the same path with a `SplitGroup`: the executor sta
 one engine per child on its own virtual thread, waits for all of them, and the status
 endpoint merges the children's histograms. A cancel (`POST /api/cancel/{id}`) calls
 `LoadEngine.stop()`: the engine ends at once and keeps the partial results.
+
+## Deployment and queue mode
+
+The default deployment runs load tests inside the API process. Queue mode
+(`USE_SQS=true`) is implemented but, as in the Python version, **not deployed**: the
+worker manifest and image exist and CI does not apply or build them.
+
+```mermaid
+flowchart LR
+    subgraph K8s["Kubernetes (k8s/)"]
+        SVC["Service load-tester-api<br/>NodePort :8080"]
+        API["Deployment load-tester-api<br/>backend image, USE_SQS=false<br/>ALLOW_PRIVATE_TARGETS=false"]
+        W["Deployment load-tester-worker<br/>(not deployed)<br/>java -jar load-tester.jar worker"]
+        PVC[("PVC load-tester-db-pvc<br/>H2 file in /data")]
+        SVC --> API
+        API --> PVC
+        W --> PVC
+    end
+    SQS[["AWS SQS queue<br/>SQS_QUEUE_URL"]]
+    API -. "queue mode: JobMessage (JSON)" .-> SQS
+    SQS -. "long poll, run, delete" .-> W
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as Browser / CLI
+    participant A as API (RunExecutor)
+    participant Q as JobQueue (SqsJobQueue)
+    participant W as Worker (QueueWorker)
+    participant R as JobRunner + LoadEngine
+    participant DB as Shared H2 (AUTO_SERVER)
+
+    U->>A: POST /api/start-load-test
+    A->>DB: save TestRun (queued)
+    A->>Q: send(JobMessage.of(plan))
+    A-->>U: 202 {job_id}
+    loop every 10 s (long poll)
+        W->>Q: receive(1, 10 s)
+    end
+    Q-->>W: JobMessage
+    W->>R: run(message.toPlan())
+    R->>DB: running → results, completed
+    W->>Q: delete(receipt)
+    A->>DB: poll status until terminal (holds the MAX_ACTIVE_RUNS slot)
+    U->>A: GET /api/load-test-status/{id}
+    A-->>U: results from the shared database
+```
+
+Queue classes (`com.elevate.queue`): `JobQueue` (interface), `SqsJobQueue` (AWS SDK v2),
+`JobMessage` (Python's payload keys), `QueueWorker` (poll → run → delete, also on failure),
+`WorkerMode` (the `worker` entry point: no web server, queue mode on), `QueueConfig`
+(beans only when `USE_SQS=true`). `JobRunner` is shared by local execution and the worker.

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.elevate.analysis.slo.Slo;
+import com.elevate.model.CapacityPlan;
 import com.elevate.model.Expectation;
 import com.elevate.model.JobType;
 import com.elevate.model.RunMode;
@@ -34,6 +35,7 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
  * @param caseExpectations      expected answer per case
  * @param slo                   thresholds
  * @param mode                  always fixed (capacity runs are never split)
+ * @param capacityPlan          always {@code null} (capacity runs are never split)
  * @param childJobs             the engine instances
  * @param p95Exact              always {@code true}: merged HdrHistograms give the exact p95
  * @param analysis              failure summary, outcome summary, verdict (unwrapped)
@@ -42,7 +44,8 @@ public record GroupView(String groupId, String targetUrl, JobType jobType, int u
                         int durationSeconds, int childCount, RunStatus status, String error, String createdAt,
                         String completedAt, boolean isBaseline, List<String> headerNames, String aggregatedStatsCsv,
                         String aggregatedFailuresCsv, String aggregatedHistoryCsv,
-                        Map<String, Expectation> caseExpectations, Slo slo, RunMode mode, List<ChildJobView> childJobs,
+                        Map<String, Expectation> caseExpectations, Slo slo, RunMode mode, CapacityPlan capacityPlan,
+                        List<ChildJobView> childJobs,
                         boolean p95Exact, @JsonUnwrapped RunAnalysis analysis) implements RunView {
 
     @Override

@@ -248,3 +248,45 @@ unless they say otherwise.
     Everything runs in one JVM, so split runs are parallel on one machine, not
     distributed. Percentiles are exact only to 0.1%. Load-test requests do not follow
     redirects. The H2 database is per backend, so two backends would not share history.
+
+## Added in the UI-revamp parity round
+
+| Concept | Where | What it does here, and why |
+|---|---|---|
+| Interface + adapter | `queue/JobQueue.java`, `queue/SqsJobQueue.java` | The rest of the code only knows "send, receive, delete a job". `SqsJobQueue` adapts that to AWS SDK v2; tests use an in-memory `FakeJobQueue`, so no AWS account is needed. |
+| Conditional beans | `queue/QueueConfig.java` (`@ConditionalOnProperty`) | The SQS client and queue exist only when `USE_SQS=true`. Without them the app runs exactly as before. |
+| Optional dependency | `RunExecutor` (`ObjectProvider<JobQueue>`) | `getIfAvailable()` gives the queue in queue mode and `null` otherwise, so one class serves both modes without two code paths in Spring wiring. |
+| Profiles + no web server | `queue/WorkerMode.java` (`@Profile("worker")`, `WebApplicationType.NONE`) | `java -jar load-tester.jar worker` starts the same application as a polling loop with no HTTP server. |
+| Extract class (refactoring) | `service/JobRunner.java` | The "run one job on an engine and store the outcome" code moved out of `RunExecutor` so the backend and the worker share it. |
+| picocli subcommands | `cli/LoadTestCli.java`, `GateCommand`, `SitemapCheckCommand` | One jar, several commands (`run`, `gate`, `check-sitemap`), each a `Callable<Integer>` whose return value is the exit code. |
+| Records with JSON naming | `queue/JobMessage.java` | The queue message keeps the Python payload's snake_case keys, so a Python and a Java worker could read the same queue. |
+
+### More viva questions
+
+26. **What is queue mode, and why is it off by default?**
+    With `USE_SQS=true` the API does not run load tests itself; it puts a `JobMessage`
+    on an SQS queue and a separate worker process runs it and writes the results to the
+    shared database. It decouples load generation from the API, but it needs AWS and a
+    shared database, so — like the Python version — it is implemented but not deployed.
+
+27. **How do you test SQS code without AWS?**
+    Two ways. `SqsJobQueue` is tested with a Mockito mock of `SqsClient`, checking the
+    exact `SendMessageRequest`, `ReceiveMessageRequest` and `DeleteMessageRequest`. The
+    worker and the API side are tested with `FakeJobQueue`, an in-memory implementation of
+    the same interface.
+
+28. **Why does the worker delete the message even when the job fails?**
+    Otherwise SQS would deliver it again after the visibility timeout and a broken job
+    would be retried forever. The failure is recorded on the run instead (status
+    `failed`), which is what the user sees.
+
+29. **In queue mode, how does `MAX_ACTIVE_RUNS` still work if the API does not run the test?**
+    The background task that holds the semaphore permit polls the run's status in the
+    database until it is terminal, then releases the permit. A series also waits for each
+    repeat this way before starting the next.
+
+30. **Why could a p95 read higher than the slowest request, and how did you fix it?**
+    HdrHistogram reports the highest value of the bucket a value falls in (3 significant
+    digits). For a handful of requests that can be a fraction of a millisecond above the
+    exact maximum, which we record separately. `CaseStats` now clamps every reported
+    percentile to the exact min–max range.

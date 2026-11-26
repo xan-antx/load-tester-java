@@ -97,12 +97,13 @@ class HistoryAndBaselineControllerTest {
         when(baselines.regressions(eq("r"), isNull())).thenReturn(new RegressionsResponse("http://h", "b", false,
                 new RegressionsResponse.Baseline("b", 15, "t", false),
                 new RegressionReport(List.of(new RegressionReport.Regression("login", 0, 30, 30, 20, 20)), 150.0, 180.0, 20.0,
-                        10.0, 5)));
+                        10.0, 5), true));
         mvc.perform(get("/api/regressions/r")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.is_current_baseline").value(false))
                 .andExpect(jsonPath("$.baseline.users").value(15))
                 .andExpect(jsonPath("$.regressions[0].case").value("login"))
                 .andExpect(jsonPath("$.p95_change_pct").value(20.0))
+                .andExpect(jsonPath("$.p95_exact").value(true))
                 .andExpect(jsonPath("$.report").doesNotExist());
         when(baselines.regressions(eq("x"), eq("nope"))).thenThrow(new NotFoundException("baseline run 'nope' not found"));
         mvc.perform(get("/api/regressions/x").param("baseline_id", "nope")).andExpect(status().isNotFound());

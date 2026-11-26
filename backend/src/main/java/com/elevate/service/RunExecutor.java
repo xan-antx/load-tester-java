@@ -1,5 +1,6 @@
 package com.elevate.service;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -11,14 +12,15 @@ import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import com.elevate.analysis.headers.RequestHeaders;
-import com.elevate.engine.EngineResult;
-import com.elevate.engine.LoadEngine;
-import com.elevate.engine.StopReason;
+import com.elevate.exception.ConflictException;
 import com.elevate.exception.NotFoundException;
 import com.elevate.model.RunStatus;
+import com.elevate.queue.JobMessage;
+import com.elevate.queue.JobQueue;
 
 import jakarta.annotation.PreDestroy;
 
@@ -31,30 +33,45 @@ import jakarta.annotation.PreDestroy;
  * A split group runs each child's engine on its own virtual thread, in parallel, and waits
  * for all of them. A series runs its repeats one after another and stops at the first that
  * does not complete.
+ *
+ * <p>Queue mode ({@code USE_SQS=true}, not deployed — as in the Python version): each job is
+ * sent to the {@link JobQueue} instead of running here, and a worker process runs it. The
+ * top-level task then waits until the run has finished, so it still counts against
+ * {@code MAX_ACTIVE_RUNS} and a series still runs its repeats one after another.
  */
 @Service
 public class RunExecutor {
 
     private static final Logger LOG = LoggerFactory.getLogger(RunExecutor.class);
     private static final long SHUTDOWN_WAIT_SECONDS = 20;
+    private static final Duration QUEUE_POLL = Duration.ofSeconds(1);
 
     private final RunStore store;
     private final RunRegistry registry;
     private final ActiveRunLimiter limiter;
-    private final EngineSpecFactory specs;
+    private final JobRunner jobs;
+    private final JobQueue queue;
     private final ExecutorService threads = Executors.newVirtualThreadPerTaskExecutor();
 
     /**
      * @param store    database writes
      * @param registry running engines and cancel requests
      * @param limiter  the MAX_ACTIVE_RUNS slots
-     * @param specs    builds engine specifications
+     * @param jobs     runs a job on a load engine
+     * @param queue      the job queue in queue mode (absent otherwise)
      */
-    public RunExecutor(RunStore store, RunRegistry registry, ActiveRunLimiter limiter, EngineSpecFactory specs) {
+    public RunExecutor(RunStore store, RunRegistry registry, ActiveRunLimiter limiter, JobRunner jobs,
+                       ObjectProvider<JobQueue> queue) {
         this.store = store;
         this.registry = registry;
         this.limiter = limiter;
-        this.specs = specs;
+        this.jobs = jobs;
+        this.queue = queue.getIfAvailable();
+    }
+
+    /** Whether jobs go to a queue instead of running in this process. */
+    public boolean isQueueMode() {
+        return queue != null;
     }
 
     /**
@@ -95,8 +112,13 @@ public class RunExecutor {
      *
      * @param id the run
      * @throws NotFoundException when no run has that id
+     * @throws ConflictException in queue mode, where the engine runs in another process
      */
     public void cancel(String id) {
+        if (isQueueMode()) {
+            throw new ConflictException("Stopping a test is not available in queue (SQS) mode: the worker runs on "
+                    + "another machine, so this server cannot reach its load engine.");
+        }
         RunStore.Kind kind = store.kindOf(id).orElseThrow(() -> new NotFoundException("run '" + id + "' not found"));
         switch (kind) {
             case SERIES -> {
@@ -125,6 +147,13 @@ public class RunExecutor {
     }
 
     private void execute(PreparedRun run, RequestHeaders headers) {
+        executeHere(run, headers);
+        if (isQueueMode()) {
+            awaitEnd(run.id());
+        }
+    }
+
+    private void executeHere(PreparedRun run, RequestHeaders headers) {
         if (!run.isGroup()) {
             executeJob(run.id(), headers);
             return;
@@ -149,22 +178,28 @@ public class RunExecutor {
             store.changeJobStatus(jobId, RunStatus.CANCELLED, null);
             return;
         }
+        JobPlan plan;
         try {
-            LoadEngine engine = new LoadEngine(specs.create(store.loadPlan(jobId), headers));
-            registry.register(jobId, engine);
-            store.changeJobStatus(jobId, RunStatus.RUNNING, null);
-            EngineResult result = engine.run();
-            if (registry.isShuttingDown()) {
-                store.saveResults(jobId, result, RunStatus.INTERRUPTED, RunStore.INTERRUPTED_REASON);
-            } else {
-                RunStatus status = result.stopReason() == StopReason.CANCELLED ? RunStatus.CANCELLED : RunStatus.COMPLETED;
-                store.saveResults(jobId, result, status, null);
+            plan = store.loadPlan(jobId);
+            if (isQueueMode()) {
+                queue.send(JobMessage.of(plan));
+                return;
             }
         } catch (RuntimeException e) {
-            LOG.error("Load test {} failed", jobId, e);
-            store.changeJobStatus(jobId, RunStatus.FAILED, headers.redact(String.valueOf(e.getMessage())));
-        } finally {
-            registry.unregister(jobId);
+            jobs.fail(jobId, e, headers);
+            return;
+        }
+        jobs.run(plan, headers);
+    }
+
+    /** Queue mode: waits (polling the database the worker writes to) until the run has finished. */
+    private void awaitEnd(String runId) {
+        try {
+            while (!store.statusOf(runId).map(RunStatus::isTerminal).orElse(true) && !registry.isShuttingDown()) {
+                Thread.sleep(QUEUE_POLL.toMillis());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

@@ -190,7 +190,8 @@ class LoadTestServiceTest {
     void busyServerGives429AndStoresNothing() {
         doThrow(new TooManyActiveRunsException(1, 1)).when(limiter).acquire();
         assertThatThrownBy(() -> service.startApiTest(simple(5))).isInstanceOf(TooManyActiveRunsException.class);
-        verifyNoInteractions(store, executor);
+        verifyNoInteractions(store);
+        verify(executor, never()).launch(any(), any());
     }
 
     @Test
